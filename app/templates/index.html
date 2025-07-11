@@ -1,0 +1,93 @@
+<!-- app/templates/index.html  --> 
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat Gemini</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="chat-container">
+        <div id="chat-history" class="chat-history"></div>
+        <div id="typing-indicator" class="typing-indicator" style="display:none;">Escribiendo...</div>
+        <form id="chat-form">
+            <input type="text" id="chat-input" autocomplete="off" placeholder="Escribe tu mensaje..." required>
+            <button type="submit">Enviar</button>
+        </form>
+    </div>
+    
+
+
+
+    <script> 
+
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            window.location.href = '/auth'; // Redirige a la página de login/registro
+        } 
+
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const chatHistory = document.getElementById('chat-history');
+        const typingIndicator = document.getElementById('typing-indicator');
+    
+        // Aquí debes poner el token JWT que obtuviste en login
+        // Por ejemplo, si lo guardaste en localStorage:
+    
+        async function sendMessage(msg) {
+            typingIndicator.style.display = 'block';
+    
+            const res = await fetch('/chat/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ content: msg })
+            });
+    
+            typingIndicator.style.display = 'none';
+    
+            if (!res.ok) {
+                // Si el token expira o es inválido, redirigir a login
+                if (res.status === 401 || res.status === 422) { // 422 Unprocessable Entity es común para JWT inválido
+                    alert('Sesión expirada o inválida. Por favor, inicia sesión de nuevo.');
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    window.location.href = '/auth';
+                } else {
+                    const errorData = await res.json();
+                    alert('Error: ' + (errorData.error || data.msg || 'Error desconocido'));
+                }
+                return null;
+            }
+
+            return await res.json();
+        }
+    
+        function appendMessage(role, text) {
+            const div = document.createElement('div');
+            div.classList.add(role === 'user' ? 'user-message' : 'assistant-message');
+            div.textContent = text;
+            chatHistory.appendChild(div);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+    
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = chatInput.value.trim();
+            if (!message) return;
+    
+            appendMessage('user', message);
+            chatInput.value = '';
+    
+            const response = await sendMessage(message);
+            if (response && response.answer) {
+                appendMessage('assistant', response.answer);
+            }
+        });
+    </script>
+    
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!-- app/templates/auth.html --> 
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Login / Registro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Estilos específicos para la forma de autenticación */
+        .auth-container {
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .auth-container input[type="email"],
+        .auth-container input[type="password"] {
+            width: calc(100% - 20px); /* Ajusta para padding */
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .auth-container button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .auth-container button:hover {
+            background-color: #0056b3;
+        }
+        .auth-container .message {
+            margin-top: 15px;
+            text-align: center;
+            color: green;
+        }
+        .auth-container .error {
+            color: red;
+        }
+        .auth-container p {
+            text-align: center;
+            margin-top: 15px;
+        }
+        .auth-container a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .auth-container a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <h2 id="form-title">Login</h2>
+        <form id="auth-form">
+            <input type="email" id="email" placeholder="Email" required>
+            <input type="password" id="password" placeholder="Contraseña" required>
+            <button type="submit" id="submit-button">Login</button>
+        </form>
+        <p id="toggle-message">¿No tienes cuenta? <a href="#" id="toggle-link">Regístrate aquí</a></p>
+        <div id="auth-message" class="message"></div>
+    </div>
+
+    <script>
+        const authForm = document.getElementById('auth-form');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const submitButton = document.getElementById('submit-button');
+        const formTitle = document.getElementById('form-title');
+        const toggleLink = document.getElementById('toggle-link');
+        const toggleMessage = document.getElementById('toggle-message');
+        const authMessageDiv = document.getElementById('auth-message');
+
+        let isLoginMode = true; // True para Login, False para Registro
+
+        function showMessage(msg, isError = false) {
+            authMessageDiv.textContent = msg;
+            authMessageDiv.className = isError ? 'message error' : 'message';
+        }
+
+        toggleLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            isLoginMode = !isLoginMode;
+            if (isLoginMode) {
+                formTitle.textContent = 'Login';
+                submitButton.textContent = 'Login';
+                toggleLink.textContent = 'Regístrate aquí';
+                toggleMessage.innerHTML = '¿No tienes cuenta? <a href="#" id="toggle-link">Regístrate aquí</a>';
+            } else {
+                formTitle.textContent = 'Registro';
+                submitButton.textContent = 'Registrarse';
+                toggleLink.textContent = 'Inicia sesión aquí';
+                toggleMessage.innerHTML = '¿Ya tienes cuenta? <a href="#" id="toggle-link">Inicia sesión aquí</a>';
+            }
+            // Volver a vincular el evento click al nuevo toggleLink si el innerHTML lo sobrescribe
+            document.getElementById('toggle-link').addEventListener('click', toggleLink.originalListener);
+            showMessage(''); // Limpiar mensajes
+        });
+        // Guardar referencia al listener para poder re-adjuntarlo
+        toggleLink.originalListener = toggleLink.originalListener || toggleLink.listener; // No es necesario, pero ayuda a debug
+        toggleLink.listener = toggleLink.addEventListener('click', toggleLink.originalListener); // Esto es incorrecto, ver nota abajo
+
+        // FIX para el toggleLink event listener:
+        // La forma más robusta es no sobrescribir el innerHTML
+        // o re-adjuntar el listener después de sobrescribir.
+        // Simplificado:
+        const originalToggleLinkListener = (e) => {
+            e.preventDefault();
+            isLoginMode = !isLoginMode;
+            if (isLoginMode) {
+                formTitle.textContent = 'Login';
+                submitButton.textContent = 'Login';
+                toggleMessage.innerHTML = '¿No tienes cuenta? <a href="#" id="toggle-link">Regístrate aquí</a>';
+            } else {
+                formTitle.textContent = 'Registro';
+                submitButton.textContent = 'Registrarse';
+                toggleMessage.innerHTML = '¿Ya tienes cuenta? <a href="#" id="toggle-link">Inicia sesión aquí</a>';
+            }
+            // IMPORTANTE: Si el innerHTML ha reemplazado el elemento, el listener se pierde.
+            // Hay que re-adjuntarlo o evitar reemplazar el <a>
+            document.getElementById('toggle-link').addEventListener('click', originalToggleLinkListener);
+            showMessage(''); // Limpiar mensajes
+        };
+        document.getElementById('toggle-link').addEventListener('click', originalToggleLinkListener);
+
+
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = emailInput.value;
+            const password = passwordInput.value;
+
+            const endpoint = isLoginMode ? '/auth/login' : '/auth/register';
+            submitButton.disabled = true; // Deshabilita el botón mientras se procesa
+            showMessage('Cargando...', false);
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    showMessage(data.msg || 'Éxito', false);
+                    if (isLoginMode && data.access_token) {
+                        localStorage.setItem('access_token', data.access_token);
+                        localStorage.setItem('refresh_token', data.refresh_token); // Guarda el refresh token también
+                        // Redirigir a la página de chat
+                        window.location.href = '/';
+                    }
+                } else {
+                    showMessage(data.msg || 'Ocurrió un error', true);
+                }
+            } catch (error) {
+                showMessage('Error de conexión: ' + error.message, true);
+            } finally {
+                submitButton.disabled = false; // Habilita el botón de nuevo
+            }
+        });
+    </script>
+</body>
+</html>
